@@ -216,37 +216,42 @@ int main(void)
 
     while(1) {
 
-        while(uart_getc() != 'L') {};
-        trig = uart_getc();  //trigger
-        samp = uart_getc();  //samplerate
+        // Wait for start of communication by control software,
+        // character 'L' means start.
+        while (uart_getc() != 'L') {};
+        trig = uart_getc();  //2nd character received = trigger selection
+        samp = uart_getc();  //3rd character received = samplerate selection
 
+        // Init acquisition state machine
         setsamplerate(samp);
         init_count();
         sramwritemode();
+        // Start sample snapshot recording
         recording = 1;
-        //Wait until SRAM is written completely at least 1 time.
-        //Max. duration: 32ms for 1MHz = 32000 Bytes written.
+        // Wait until SRAM is written completely at least 1 time.
+        // Max. duration: 32ms for 1MHz = 32000 Bytes written.
         long_delay(40);
 
-        // Trigger: rising, falling, no
+        // Process trigger selection: rising, falling, no
         switch(trig) {
             case 'r':
-                //INT0 clear
+                // INT0 clear
                 GIFR = 0x40;
-                //INT0 rising edge trigger
+                // INT0 rising edge trigger
                 MCUCR = (MCUCR & 0xF0) | 0x03;
-                //INT0 enable
+                // INT0 enable
                 GICR |= (1 << INT0);
                 break;
             case 'f':
-                //INT0 clear
+                // INT0 clear
                 GIFR = 0x40;
-                //INT0 falling edge trigger
+                // INT0 falling edge trigger
                 MCUCR = (MCUCR & 0xF0) | 0x02;
-                //INT0 enable
+                // INT0 enable
                 GICR |= (1 << INT0);
                 break;
             default:
+                // no trigger = immediately run snapshot timer
                 starttimer();
         }
 
@@ -255,7 +260,7 @@ int main(void)
 
         // output to PC and calculate CRC16 for transport protection
         uart_putc('K');
-        // transmit single blocks with blocksize=8192
+        // transmit single blocks with blocksize = 8192
         // 8192 = max. size to detect single bit errors
         for(i = 0; i < (SRAMSIZE / 8192); i++){
             // crc init value
@@ -267,9 +272,9 @@ int main(void)
                 calc_crc16(c);
                 uart_putc(c);
             }
-            // transmit crc16 after each block
-            uart_putc(crc16&0xff);
-            uart_putc(crc16>>8);
+            // transmit crc16 after each block as 2 characters
+            uart_putc(crc16 & 0xff);
+            uart_putc(crc16 >> 8);
         }
     }
 
